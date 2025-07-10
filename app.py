@@ -1,11 +1,14 @@
 import streamlit as st
 import numpy as np
 from PIL import Image
-from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input, decode_predictions
-from tensorflow.keras.preprocessing.image import img_to_array
+import torch
+import torchvision.transforms as transforms
+from torchvision import models
 import random
+import json
+import urllib.request
 
-# Set page config first
+# Page config
 st.set_page_config(
     page_title="Smart Carbon Footprint Predictor",
     page_icon="🌿",
@@ -13,13 +16,33 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# Load model once and cache it
+# Load model and labels
 @st.cache_resource(show_spinner=False)
-def load_model():
-    return MobileNetV2(weights="imagenet")
+def load_model_and_labels():
+    model = models.mobilenet_v2(pretrained=True)
+    model.eval()
+    
+    # Load labels from ImageNet
+    url = "https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt"
+    with urllib.request.urlopen(url) as f:
+        labels = [line.strip().decode('utf-8') for line in f.readlines()]
+    
+    return model, labels
 
-model = load_model()
+model, labels = load_model_and_labels()
 
+# Image preprocessing
+preprocess = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(
+        mean=[0.485, 0.456, 0.406],  # ImageNet means
+        std=[0.229, 0.224, 0.225]    # ImageNet stds
+    )
+])
+
+# Streamlit UI
 st.title("📸 Smart Carbon Footprint Estimator")
 st.write("Upload or capture a product image to estimate its carbon footprint.")
 
@@ -39,19 +62,23 @@ if uploaded_image is not None:
     st.image(uploaded_image, caption="Input Image", use_column_width=True)
     st.write("🔍 Identifying product...")
 
-    image_resized = uploaded_image.resize((224, 224))
-    image_array = img_to_array(image_resized)
-    image_batch = np.expand_dims(image_array, axis=0)
-    processed_img = preprocess_input(image_batch)
+    # Apply preprocessing
+    image_tensor = preprocess(uploaded_image)
+    image_tensor = image_tensor.unsqueeze(0)  # Add batch dimension
 
-    preds = model.predict(processed_img)
-    decoded_preds = decode_predictions(preds, top=3)[0]
+    # Predict
+    with torch.no_grad():
+        outputs = model(image_tensor)
+        probabilities = torch.nn.functional.softmax(outputs[0], dim=0)
+
+    top3_prob, top3_catid = torch.topk(probabilities, 3)
 
     st.subheader("Top Predictions:")
-    for i, (imagenet_id, label, prob) in enumerate(decoded_preds):
-        st.write(f"{i + 1}. {label.replace('_', ' ').title()} — {prob * 100:.2f}%")
+    for i in range(top3_prob.size(0)):
+        label = labels[top3_catid[i]]
+        st.write(f"{i + 1}. {label.title()} — {top3_prob[i].item() * 100:.2f}%")
 
-    best_label = decoded_preds[0][1].replace('_', ' ').title()
+    best_label = labels[top3_catid[0]].title()
     carbon_footprint_kg = round(random.uniform(1, 100), 2)
 
     st.subheader("🌍 Estimated Carbon Footprint")
