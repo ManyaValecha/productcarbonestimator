@@ -87,3 +87,7 @@ if uploaded_image is not None:
 
 else:
     st.info("Please upload or capture a product image to get started.")
+<<<<<<< HEAD
+=======
+
+>>>>>>> 2129a2a (Updated to use PyTorch instead of TensorFlow for Streamlit deployment)
