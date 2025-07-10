@@ -24,4 +24,5 @@ RUN pip install -r requirements.txt
 COPY . .
 
 # Run Streamlit app
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.enableCORS=false"]
+CMD streamlit run app.py --server.port=${PORT:-8501} --server.enableCORS=false
+
