@@ -2,47 +2,45 @@ import streamlit as st
 import numpy as np
 from PIL import Image
 import torch
-import torchvision.transforms as transforms
-from torchvision import models
+from torchvision import models, transforms
 import random
-import json
 import urllib.request
 
-# Page config
-st.set_page_config(
-    page_title="Smart Carbon Footprint Predictor",
-    page_icon="🌿",
-    layout="centered",
-    initial_sidebar_state="auto"
-)
+# Set device to CPU
+device = torch.device("cpu")
 
-# Load model and labels
+# Load model and labels with caching
 @st.cache_resource(show_spinner=False)
 def load_model_and_labels():
-    model = models.mobilenet_v2(pretrained=True)
+    model = models.mobilenet_v2(pretrained=True).to(device)
     model.eval()
-    
-    # Load labels from ImageNet
+
     url = "https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt"
     with urllib.request.urlopen(url) as f:
-        labels = [line.strip().decode('utf-8') for line in f.readlines()]
-    
+        labels = [line.strip().decode("utf-8") for line in f.readlines()]
+
     return model, labels
 
 model, labels = load_model_and_labels()
 
-# Image preprocessing
+# Preprocessing pipeline
 preprocess = transforms.Compose([
     transforms.Resize(256),
     transforms.CenterCrop(224),
     transforms.ToTensor(),
     transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],  # ImageNet means
-        std=[0.229, 0.224, 0.225]    # ImageNet stds
-    )
+        mean=[0.485, 0.456, 0.406],  # ImageNet mean
+        std=[0.229, 0.224, 0.225]    # ImageNet std
+    ),
 ])
 
-# Streamlit UI
+st.set_page_config(
+    page_title="Smart Carbon Footprint Estimator",
+    page_icon="🌿",
+    layout="centered",
+    initial_sidebar_state="auto"
+)
+
 st.title("📸 Smart Carbon Footprint Estimator")
 st.write("Upload or capture a product image to estimate its carbon footprint.")
 
@@ -62,11 +60,8 @@ if uploaded_image is not None:
     st.image(uploaded_image, caption="Input Image", use_column_width=True)
     st.write("🔍 Identifying product...")
 
-    # Apply preprocessing
-    image_tensor = preprocess(uploaded_image)
-    image_tensor = image_tensor.unsqueeze(0)  # Add batch dimension
+    image_tensor = preprocess(uploaded_image).unsqueeze(0).to(device)
 
-    # Predict
     with torch.no_grad():
         outputs = model(image_tensor)
         probabilities = torch.nn.functional.softmax(outputs[0], dim=0)
@@ -87,7 +82,4 @@ if uploaded_image is not None:
 
 else:
     st.info("Please upload or capture a product image to get started.")
-<<<<<<< HEAD
-=======
 
->>>>>>> 2129a2a (Updated to use PyTorch instead of TensorFlow for Streamlit deployment)
